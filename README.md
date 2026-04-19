@@ -8,6 +8,8 @@
 
 Agentic FairFrame is a Chrome extension that lives in your **side panel**. Open any website, run a review, and watch the AI agent think, test, and analyze the page in real-time.
 
+**[Watch the Demo on YouTube](https://www.youtube.com/watch?v=JjljKMmM4pM)**
+
 ---
 
 ## How the Agentic Loop Works
@@ -49,9 +51,7 @@ while (!isDone && loopCount < MAX_LOOPS) {
     // ── TOOL CALL PATH (parallel execution via Promise.allSettled) ──
     const settled = await Promise.allSettled(
       fnCallParts.map(async (fnCallPart) => {
-        onLog(`Tool Call: ${fnName}`);
         const result = await executeTool(fnName, args);
-        onLog(`Result (${fnName}): ${JSON.stringify(result)}`);
         return { functionResponse: { name: fnName, response: { output: result } } };
       })
     );
@@ -70,29 +70,12 @@ while (!isDone && loopCount < MAX_LOOPS) {
 
 ## Reasoning Chain Display
 
-The extension displays the agent's reasoning chain in **two places** — not just the final answer:
+The extension displays the agent's reasoning chain — not just the final answer:
 
-1. **Live terminal on the Home tab** — shows the reasoning chain while the agent is running
-2. **Dedicated "Agent" tab** — persists the full chain after the run completes so you can review every tool call and result at any time
+1. **Live terminal on the Home tab** — shows the chain while the agent is running
+2. **Dedicated "Agent" tab** — persists the full chain after the run completes
 
-```typescript
-// Background script streams each step to the side panel via messages
-const onAgentLog = (msg: string) => {
-  chrome.runtime.sendMessage({ type: "AGENT_LOG_UPDATE", message: msg });
-};
-
-// Side panel listens and stores timestamped entries
-useEffect(() => {
-  const handler = (req: any) => {
-    if (req.type === "AGENT_LOG_UPDATE") {
-      setAgentLogs(prev => [...prev, { time: new Date().toLocaleTimeString(), msg: req.message }]);
-    }
-  };
-  chrome.runtime.onMessage.addListener(handler);
-}, []);
-```
-
-The **Agent tab** renders each entry with color-coded highlighting:
+The Agent tab color-codes each entry:
 
 | Color | Meaning |
 |-------|---------|
@@ -116,30 +99,6 @@ Parallel   (after):   Tool A (200ms) ─┐
 ```
 
 All 5 tools are safe to parallelize — they are independent operations (pure math, network fetch, or read-only DOM inspection) with no shared mutable state.
-
-```typescript
-const settled = await Promise.allSettled(
-  fnCallParts.map(async (fnCallPart) => {
-    const result = await executeTool(fnCallPart.functionCall.name, args);
-    return { functionResponse: { name, response: { output: result } } };
-  })
-);
-// Even if one tool throws, others still return valid results
-```
-
----
-
-## Side Panel Tabs
-
-The side panel has **5 tabs**:
-
-| Tab | Icon | What it shows |
-|-----|------|---------------|
-| **Home** | Squares | Run button, live terminal during analysis, summary cards |
-| **Findings** | List | All issues found, export to Markdown/JSON |
-| **Agent** | Brain | Full reasoning chain — every tool call and result with timestamps |
-| **This page** | Monitor | Page metadata, viewport, model info, snapshot |
-| **Activity** | Scroll | Raw step-by-step debug log |
 
 ---
 
@@ -212,37 +171,45 @@ export const agenticToolsSchema = [{
 
 ---
 
-## Example Agent Run (what the Agent tab shows)
+## Side Panel Tabs
 
-```
-[11:08:01] 🤖 Agent initializing...
-[11:08:02] 💭 Agent is thinking (Turn 1)...
-[11:08:04] 🛠️ Tool Call: Executing calculate_color_contrast
-[11:08:04] 🛠️ Tool Call: Executing test_hyperlink_health
-[11:08:04] 📥 Result (calculate_color_contrast): {"ratio":"1.36:1","passes_AA_normal":false}
-[11:08:05] 📥 Result (test_hyperlink_health): {"url":"...","status":404,"isBroken":true}
-[11:08:05] 💭 Agent is thinking (Turn 2)...
-[11:08:07] 🛠️ Tool Call: Executing simulate_focus_tabs
-[11:08:07] 🛠️ Tool Call: Executing check_image_alt_texts
-[11:08:07] 📥 Result (simulate_focus_tabs): {"focused_elements":["Home","About","Contact"]}
-[11:08:07] 📥 Result (check_image_alt_texts): {"total_images":3,"missing_alt_attributes":2}
-[11:08:08] 💭 Agent is thinking (Turn 3)...
-[11:08:09] 🛠️ Tool Call: Executing analyze_heading_hierarchy
-[11:08:09] 📥 Result (analyze_heading_hierarchy): {"heading_order":["h1","h3","h4"]}
-[11:08:10] 💭 Agent is thinking (Turn 4)...
-[11:08:15] ✅ Audit Complete! Generating final report.
-```
+The side panel has **5 tabs**:
+
+| Tab | Icon | What it shows |
+|-----|------|---------------|
+| **Home** | Squares | Run button, live terminal during analysis, summary cards |
+| **Findings** | List | All issues found, export to Markdown/JSON |
+| **Agent** | Brain | Full reasoning chain — every tool call and result with timestamps |
+| **This page** | Monitor | Page metadata, viewport, model info, snapshot |
+| **Activity** | Scroll | Raw step-by-step debug log |
 
 ---
 
 ## Screenshots
 
-![Agentic FairFrame in the browser - wide view](./Images/2.png)
+### Browser with Side Panel Open (Home Tab)
 
-| Side Panel View | Highlights View |
-| :---: | :---: |
-| ![Agentic FairFrame side panel](./Images/1.png) | ![Agentic FairFrame side panel](./Images/4.png) |
-| ![Agentic FairFrame side panel](./Images/3.png) | ![Agentic FairFrame side panel](./Images/5.png) |
+![Full browser view with Agentic FairFrame side panel open](./Images/1.png)
+
+### Findings Tab — Issues Found
+
+![Findings tab showing categorized issues with severity tags](./Images/2.png)
+
+### Agent Tab — Reasoning Chain
+
+![Agent tab showing every tool call, result, and decision with timestamps](./Images/3.png)
+
+### Visual Highlights Overlay
+
+![Highlight boxes drawn directly on the webpage showing where issues are](./Images/4.png)
+
+---
+
+## Demo Video
+
+**[Watch the full demo on YouTube](https://www.youtube.com/watch?v=JjljKMmM4pM)** — see the agent analyze a real website, call tools, and generate the audit report live.
+
+[![Agentic FairFrame Demo](https://img.youtube.com/vi/JjljKMmM4pM/maxresdefault.jpg)](https://www.youtube.com/watch?v=JjljKMmM4pM)
 
 ---
 
@@ -266,7 +233,22 @@ export const agenticToolsSchema = [{
 | `src/background/agentTools.ts` | 5 custom tool functions + their schema declarations for Gemini |
 | `src/background/index.ts` | Bridges agent logs to the side panel UI via `chrome.runtime.sendMessage` |
 | `src/sidepanel/App.tsx` | React UI — 5 tabs including the dedicated **Agent** tab for the full reasoning chain |
-| `public/icons/icon-source.svg` | SVG source for the extension icon (robot agent in scanning brackets) |
+| `public/icons/icon-source.svg` | SVG source for the extension icon |
+
+---
+
+## Settings & Configuration
+
+- **API Key** — Required for the default Gemini setup. Can also be set via `GEMINI_API_KEY=...` in a project `.env` file.
+- **Models** — Uses the best available Gemini models by default. Override in the options page to try newer models.
+- **AI Mockups** — Optional: the AI can generate wireframe ideas for design findings. Toggle on/off in settings.
+- **Custom Server** — Enter your own API URL in settings to bypass Gemini entirely.
+
+---
+
+## Privacy
+
+Agentic FairFrame only reads **the active tab you choose to review**. Your data stays locally on your machine, except when transmitted to **Google Gemini** (or your custom server) for analysis. See [Google AI terms](https://ai.google.dev/terms) for details.
 
 ---
 
