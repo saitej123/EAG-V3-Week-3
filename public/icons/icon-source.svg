@@ -1,41 +1,60 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" aria-hidden="true">
   <defs>
-    <!-- Deep futuristic dark background -->
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0f172a"/>
-      <stop offset="100%" stop-color="#020617"/>
-    </linearGradient>
-    <!-- Cyan/Teal to Electric Blue frame -->
-    <linearGradient id="frameGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#06b6d4"/>
-      <stop offset="100%" stop-color="#3b82f6"/>
-    </linearGradient>
-    <!-- Bright Neon Green to Cyan agent -->
-    <linearGradient id="agentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#10b981"/>
-      <stop offset="100%" stop-color="#0ea5e9"/>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#18181b"/>
+      <stop offset="100%" stop-color="#3f3f46"/>
     </linearGradient>
   </defs>
-  <rect width="128" height="128" rx="26" fill="url(#bg)"/>
-  
-  <!-- Frame / Corners -->
-  <g fill="none" stroke="url(#frameGrad)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M 34 34 V 54 M 34 34 H 54"/>
-    <path d="M 94 34 V 54 M 94 34 H 74"/>
-    <path d="M 34 94 V 74 M 34 94 H 54"/>
-    <path d="M 94 94 V 74 M 94 94 H 74"/>
+
+  <!-- White background with subtle border -->
+  <rect width="128" height="128" rx="28" fill="#ffffff"/>
+  <rect width="128" height="128" rx="28" fill="none" stroke="#e4e4e7" stroke-width="1.5"/>
+
+  <!-- Scanning corner brackets -->
+  <g fill="none" stroke="url(#accent)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 28 42 V 28 H 42"/>
+    <path d="M 86 28 H 100 V 42"/>
+    <path d="M 100 86 V 100 H 86"/>
+    <path d="M 42 100 H 28 V 86"/>
   </g>
-  
-  <!-- Agent icon/robot symbol -->
-  <g fill="none" stroke="url(#agentGrad)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
-    <!-- Robot head -->
-    <rect x="46" y="52" width="36" height="26" rx="6" />
-    <!-- Eyes -->
-    <circle cx="56" cy="63" r="2.5" fill="#34d399" stroke="none" />
-    <circle cx="72" cy="63" r="2.5" fill="#34d399" stroke="none" />
-    <!-- Antenna base & rod -->
-    <path d="M 64 52 V 42" />
-    <!-- Antenna bulb -->
-    <circle cx="64" cy="38" r="3.5" fill="#38bdf8" stroke="none" />
+
+  <!-- Dashed orbit ring -->
+  <circle cx="64" cy="66" r="33" fill="none" stroke="#d4d4d8" stroke-width="1.5" stroke-dasharray="6 4"/>
+
+  <!-- Robot antenna rod -->
+  <line x1="64" y1="46" x2="64" y2="36" stroke="#18181b" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- Robot antenna bulb -->
+  <circle cx="64" cy="33" r="4" fill="#18181b"/>
+
+  <!-- Robot head -->
+  <rect x="44" y="46" width="40" height="30" rx="8" fill="none" stroke="#18181b" stroke-width="3"/>
+
+  <!-- Robot left eye -->
+  <circle cx="55" cy="59" r="4" fill="#18181b"/>
+
+  <!-- Robot right eye -->
+  <circle cx="73" cy="59" r="4" fill="#18181b"/>
+
+  <!-- Robot mouth -->
+  <line x1="56" y1="68" x2="72" y2="68" stroke="#18181b" stroke-width="2.5" stroke-linecap="round"/>
+
+  <!-- Robot body (small torso below head) -->
+  <rect x="50" y="79" width="28" height="14" rx="5" fill="none" stroke="#a1a1aa" stroke-width="2.5"/>
+
+  <!-- Robot arms / neural lines to brackets -->
+  <g stroke="#a1a1aa" stroke-width="1.5" stroke-linecap="round">
+    <line x1="44" y1="54" x2="36" y2="42"/>
+    <line x1="84" y1="54" x2="92" y2="42"/>
+    <line x1="50" y1="88" x2="36" y2="86"/>
+    <line x1="78" y1="88" x2="92" y2="86"/>
+  </g>
+
+  <!-- Endpoint dots (tool nodes) -->
+  <g fill="#71717a">
+    <circle cx="36" cy="42" r="2.5"/>
+    <circle cx="92" cy="42" r="2.5"/>
+    <circle cx="92" cy="86" r="2.5"/>
+    <circle cx="36" cy="86" r="2.5"/>
   </g>
 </svg>

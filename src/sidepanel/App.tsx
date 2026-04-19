@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, useRef, type ReactNode } from "react";
 import {
+  BrainCircuit,
   Download,
   Eye,
   EyeOff,
@@ -31,7 +32,7 @@ const PIPELINE_STEPS = [
   "Drawing highlights",
 ] as const;
 
-type PanelTab = "overview" | "issues" | "page" | "log";
+type PanelTab = "overview" | "issues" | "agent" | "page" | "log";
 
 function downloadText(filename: string, text: string, mime: string) {
   const blob = new Blob([text], { type: mime });
@@ -65,13 +66,16 @@ export default function App() {
   const [hasGeminiKey, setHasGeminiKey] = useState(false);
   const [stepIdx, setStepIdx] = useState(0);
   const [tab, setTab] = useState<PanelTab>("overview");
-  const [agentLogs, setAgentLogs] = useState<string[]>([]);
+  const [agentLogs, setAgentLogs] = useState<{ time: string; msg: string }[]>([]);
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handler = (req: any) => {
       if (req.type === "AGENT_LOG_UPDATE") {
-        setAgentLogs((prev) => [...prev, req.message]);
+        setAgentLogs((prev) => [
+          ...prev,
+          { time: new Date().toLocaleTimeString(), msg: req.message },
+        ]);
       }
     };
     chrome.runtime.onMessage.addListener(handler);
@@ -233,6 +237,12 @@ export default function App() {
               <LayoutList className="h-3.5 w-3.5" />,
               !session,
             )}
+            {tabBtn(
+              "agent",
+              "Agent",
+              <BrainCircuit className="h-3.5 w-3.5" />,
+              agentLogs.length === 0,
+            )}
             {tabBtn("page", "This page", <MonitorSmartphone className="h-3.5 w-3.5" />, !session)}
             {tabBtn(
               "log",
@@ -272,17 +282,16 @@ export default function App() {
                       <span className="font-semibold text-sm">Agentic FairFrame is analyzing...</span>
                   </div>
                   
-                  {/* THE REASONING CHAIN TERMINAL */}
                   <div className="bg-gray-900 text-green-400 p-3 rounded-md text-xs font-mono h-48 overflow-y-auto space-y-2 shadow-inner">
                       {agentLogs.length === 0 ? "Waiting for Gemini..." : ""}
-                      {agentLogs.map((log, i) => (
+                      {agentLogs.map((entry, i) => (
                           <div key={i}>
-                              <span className="text-gray-500 mr-2">[{new Date().toLocaleTimeString()}]</span>
-                              {log.includes("🛠️") ? <span className="text-yellow-400">{log}</span> : 
-                               log.includes("📥") ? <span className="text-blue-300">{log}</span> : 
-                               log.includes("⚠️") ? <span className="text-orange-400">{log}</span> :
-                               log.includes("✅") ? <span className="text-emerald-400">{log}</span> :
-                               log}
+                              <span className="text-gray-500 mr-2">[{entry.time}]</span>
+                              {entry.msg.includes("🛠️") ? <span className="text-yellow-400">{entry.msg}</span> : 
+                               entry.msg.includes("📥") ? <span className="text-blue-300">{entry.msg}</span> : 
+                               entry.msg.includes("⚠️") ? <span className="text-orange-400">{entry.msg}</span> :
+                               entry.msg.includes("✅") ? <span className="text-emerald-400">{entry.msg}</span> :
+                               entry.msg}
                           </div>
                       ))}
                       <div ref={logsEndRef} />
@@ -439,6 +448,63 @@ export default function App() {
         {!needsGeminiGate && tab === "issues" && !session ? (
           <div className="flex min-h-0 flex-1 items-center justify-center p-6 text-center text-sm text-zinc-500">
             Start from <span className="font-medium text-zinc-700 dark:text-zinc-300">Home</span> and run a review first.
+          </div>
+        ) : null}
+
+        {!needsGeminiGate && tab === "agent" ? (
+          <div className="flex min-h-0 flex-1 flex-col gap-3 p-3">
+            <div className="shrink-0">
+              <div className="flex items-center gap-2 text-sm font-medium text-zinc-900 dark:text-zinc-50">
+                <BrainCircuit className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                Agent Reasoning Chain
+              </div>
+              <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+                Every tool call, result, and decision the AI made — in order.
+              </p>
+            </div>
+
+            {agentLogs.length === 0 ? (
+              <div className="flex min-h-0 flex-1 items-center justify-center p-6 text-center text-sm text-zinc-500">
+                Run a review from <span className="font-medium text-zinc-700 dark:text-zinc-300">Home</span> to see the agent&apos;s reasoning.
+              </div>
+            ) : (
+              <div className="min-h-0 flex-1 overflow-y-auto rounded-xl border border-zinc-800 bg-zinc-950 p-3">
+                <div className="space-y-1 font-mono text-[11px] leading-relaxed">
+                  {agentLogs.map((entry, i) => {
+                    const m = entry.msg;
+                    const isToolCall = m.includes("🛠️");
+                    const isResult = m.includes("📥");
+                    const isThinking = m.includes("💭");
+                    const isComplete = m.includes("✅");
+                    const isWarning = m.includes("⚠️");
+                    const isInit = m.includes("🤖");
+
+                    let textColor = "text-zinc-400";
+                    let bg = "";
+                    if (isToolCall) { textColor = "text-yellow-300"; bg = "bg-yellow-950/30"; }
+                    else if (isResult) { textColor = "text-sky-300"; bg = "bg-sky-950/20"; }
+                    else if (isThinking) { textColor = "text-violet-300"; }
+                    else if (isComplete) { textColor = "text-emerald-300"; bg = "bg-emerald-950/30"; }
+                    else if (isWarning) { textColor = "text-orange-300"; bg = "bg-orange-950/30"; }
+                    else if (isInit) { textColor = "text-zinc-300"; }
+
+                    return (
+                      <div key={i} className={cn("flex gap-2 rounded px-2 py-1", bg)}>
+                        <span className="shrink-0 tabular-nums text-zinc-600">{entry.time}</span>
+                        <span className={textColor}>{m}</span>
+                      </div>
+                    );
+                  })}
+                  {busy ? (
+                    <div className="flex items-center gap-2 px-2 py-1 text-violet-400">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      <span>Agent is working...</span>
+                    </div>
+                  ) : null}
+                  <div ref={logsEndRef} />
+                </div>
+              </div>
+            )}
           </div>
         ) : null}
 

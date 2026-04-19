@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bug Simulation Page</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            background-color: #ffffff;
+        }
+        
+        /* 1. Contrast Issue */
+        .bad-contrast {
+            color: #dddddd; /* Very light gray text on white background */
+            background-color: #ffffff;
+            padding: 10px;
+        }
+
+        /* 3. Keyboard Navigation Issue */
+        .unfocusable-button {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            cursor: pointer;
+            /* Using a div instead of a button makes it inaccessible by keyboard by default */
+        }
+        .unfocusable-button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 5. Heading Hierarchy Issue (Skipping H2) -->
+    <h1>Welcome to the Bug Simulation Page</h1>
+    <h3>This is a subheading that skips H2</h3>
+
+    <div class="bad-contrast">
+        This text has terrible contrast and is very hard to read. It violates WCAG standards.
+    </div>
+
+    <p>
+        Here is a link to our documentation: 
+        <!-- 2. Broken Link (404) -->
+        <a href="https://httpstat.us/404" target="_blank">Click here for docs</a>
+    </p>
+
+    <!-- 4. Missing Alt Text on Image -->
+    <div>
+        <p>Look at this beautiful image:</p>
+        <img src="https://via.placeholder.com/150" /> <!-- Missing alt attribute -->
+    </div>
+
+    <!-- 3. Keyboard Navigation Issue -->
+    <div style="margin-top: 20px;">
+        <div class="unfocusable-button" onclick="alert('Clicked!')">
+            Submit Form (Try tabbing to me!)
+        </div>
+    </div>
+
+</body>
+</html>

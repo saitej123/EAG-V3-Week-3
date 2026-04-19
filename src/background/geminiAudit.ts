@@ -256,12 +256,24 @@ import {
   analyze_heading_hierarchy,
 } from "./agentTools";
 
+// ──────────────────────────────────────────────────────────────
+// MAIN AGENTIC FUNCTION
+//
+// This is the core loop that calls the LLM multiple times:
+//   Query → LLM Response → Tool Call : Tool Result →
+//   Query → LLM Response → Tool Call : Tool Result →
+//   Query → LLM Response → Final Result
+//
+// - conversationHistory accumulates ALL past interactions
+// - onLog() streams each step to the side panel (reasoning chain)
+// - 5 custom tool functions are available for the LLM to call
+// ──────────────────────────────────────────────────────────────
 export async function analyzeAuditWithGemini(params: {
   apiKey: string;
   model: string;
   payload: AuditRequestPayload;
   activeTabId: number;
-  onLog: (msg: string) => void;
+  onLog: (msg: string) => void; // streams reasoning chain to the UI
 }): Promise<{ parsed: unknown; notesExtra: string }> {
   const { apiKey, model, payload, activeTabId, onLog } = params;
   onLog("🤖 Agent initializing...");
@@ -322,30 +334,62 @@ ${jsonText}
   }
   parts.push({ text: userText });
 
+  // ──────────────────────────────────────────────────────────────
+  // CONVERSATION HISTORY — stores ALL past interactions.
+  // Every query, every LLM response, and every tool result is
+  // appended here so the LLM always sees the full context:
+  //
+  //   Query1 → LLM Response → Tool Call : Tool Result →
+  //   Query2 → LLM Response → Tool Call : Tool Result →
+  //   Query3 → LLM Response → Final JSON Result
+  // ──────────────────────────────────────────────────────────────
   const conversationHistory: any[] = [{ role: "user", parts }];
 
   let isDone = false;
   let finalRawText = "";
   let loopCount = 0;
+  let jsonRetryCount = 0;
   const MAX_LOOPS = 15;
+  const MAX_JSON_RETRIES = 3;
 
+  // Dispatch a tool call to the correct function (5 custom tools)
+  async function executeTool(fnName: string, args: Record<string, any>): Promise<unknown> {
+    if (fnName === "calculate_color_contrast") {
+      return calculate_color_contrast(args.fg_hex, args.bg_hex);
+    } else if (fnName === "test_hyperlink_health") {
+      return await test_hyperlink_health(args.url);
+    } else if (fnName === "simulate_focus_tabs") {
+      return await simulate_focus_tabs(activeTabId, args.count);
+    } else if (fnName === "check_image_alt_texts") {
+      return await check_image_alt_texts(activeTabId);
+    } else if (fnName === "analyze_heading_hierarchy") {
+      return await analyze_heading_hierarchy(activeTabId);
+    }
+    return { error: `Unknown tool: ${fnName}` };
+  }
+
+  // ──────────────────────────────────────────────────────────────
+  // THE AGENTIC LOOP — calls the LLM multiple times.
+  //
+  // Each iteration:
+  //  1. Send the FULL conversationHistory to Gemini
+  //  2. Gemini responds with either a tool call or text
+  //  3a. If tool call → execute it, append result to history, loop
+  //  3b. If text → try to parse as final JSON report, done
+  //
+  // The onLog() callback streams each step to the side panel UI
+  // so the user can watch the reasoning chain in real time.
+  // ──────────────────────────────────────────────────────────────
   while (!isDone && loopCount < MAX_LOOPS) {
     loopCount++;
     onLog(`💭 Agent is thinking (Turn ${loopCount})...`);
 
-    // When we use function calling we MUST NOT force responseMimeType="application/json" on the same request
-    // where tools are passed. Function calling in Gemini REST often fails to emit valid JSON 
-    // conforming to the schema if forced into JSON mode while also outputting function calls.
-    // Instead we remove the JSON mode requirements if it's the first iterations (tool calls)
-    // OR we remove the tools on the final iteration to force JSON mode. 
-    // The simplest robust approach for this is to let Gemini use its default text mode 
-    // during the loop and use parseGeminiJsonText on the final output.
-    const bodyWithSchema = {
+    const isJsonRetry = jsonRetryCount > 0;
+    const requestBody: Record<string, unknown> = {
       systemInstruction: {
         parts: [{ text: buildSystemInstruction() }],
       },
       contents: conversationHistory,
-      tools: agenticToolsSchema,
       generationConfig: {
         temperature: 0.22,
         maxOutputTokens: 28672,
@@ -358,10 +402,15 @@ ${jsonText}
       ],
     };
 
+    // On JSON-retry turns, omit tools so the model focuses on outputting valid JSON
+    if (!isJsonRetry) {
+      requestBody.tools = agenticToolsSchema;
+    }
+
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(bodyWithSchema),
+      body: JSON.stringify(requestBody),
     });
 
     if (!res.ok) {
@@ -371,73 +420,103 @@ ${jsonText}
 
     const data = await res.json();
     const cand = data.candidates?.[0];
-    const parts = cand?.content?.parts || [];
-    const fnCallPart = parts.find((p: any) => p.functionCall);
+    const responseParts: any[] = cand?.content?.parts || [];
 
-    if (!parts.length) {
+    if (!responseParts.length) {
       const block = data.promptFeedback?.blockReason;
       if (block) throw new Error(`Gemini blocked the request (${block}).`);
       const fr = cand?.finishReason || "unknown";
       throw new Error(`Gemini returned empty response (finish: ${fr}).`);
     }
 
+    // Append the model's response to history (keeps ALL past interactions)
     conversationHistory.push(cand.content);
 
-    if (fnCallPart) {
-      const fnName = fnCallPart.functionCall.name;
-      const args = fnCallPart.functionCall.args || {};
+    // Gemini can return multiple parallel function calls in one response
+    const fnCallParts = responseParts.filter((p: any) => p.functionCall);
 
-      onLog(`🛠️ Tool Call: Executing **${fnName}**`);
+    if (fnCallParts.length > 0) {
+      jsonRetryCount = 0;
 
-      let resultData;
-      try {
-        if (fnName === "calculate_color_contrast") {
-          resultData = calculate_color_contrast(args.fg_hex, args.bg_hex);
-        } else if (fnName === "test_hyperlink_health") {
-          resultData = await test_hyperlink_health(args.url);
-        } else if (fnName === "simulate_focus_tabs") {
-          resultData = await simulate_focus_tabs(activeTabId, args.count);
-        } else if (fnName === "check_image_alt_texts") {
-          resultData = await check_image_alt_texts(activeTabId);
-        } else if (fnName === "analyze_heading_hierarchy") {
-          resultData = await analyze_heading_hierarchy(activeTabId);
-        } else {
-          resultData = { error: "Unknown tool call" };
-        }
-      } catch (e) {
-        resultData = { error: (e as Error).message };
+      // Log all tool calls upfront so the UI shows them immediately
+      for (const p of fnCallParts) {
+        onLog(`🛠️ Tool Call: Executing **${p.functionCall.name}**`);
       }
 
-      onLog(`📥 Result: ${JSON.stringify(resultData)}`);
+      // Execute ALL tool calls concurrently with Promise.allSettled.
+      // All 5 tools are independent (pure math, network fetch, or
+      // read-only DOM inspection), so parallel execution is safe and
+      // eliminates extra round-trip wait time.
+      const settled = await Promise.allSettled(
+        fnCallParts.map(async (fnCallPart: any) => {
+          const fnName: string = fnCallPart.functionCall.name;
+          const fnId: string | undefined = fnCallPart.functionCall.id;
+          const args = fnCallPart.functionCall.args || {};
 
+          let resultData: unknown;
+          try {
+            resultData = await executeTool(fnName, args);
+          } catch (e) {
+            resultData = { error: (e as Error).message };
+          }
+
+          onLog(`📥 Result (${fnName}): ${JSON.stringify(resultData)}`);
+
+          const fnResp: Record<string, unknown> = {
+            name: fnName,
+            response: { output: resultData },
+          };
+          if (fnId) fnResp.id = fnId;
+          return { functionResponse: fnResp };
+        }),
+      );
+
+      // Collect results — even rejected promises get a safe error response
+      const fnResponseParts = settled.map((s, i) => {
+        if (s.status === "fulfilled") return s.value;
+        const fallbackName = fnCallParts[i].functionCall.name;
+        onLog(`⚠️ Tool "${fallbackName}" threw unexpectedly: ${s.reason}`);
+        return {
+          functionResponse: {
+            name: fallbackName,
+            response: { output: { error: String(s.reason) } },
+          },
+        };
+      });
+
+      // Append all tool results to history → next iteration sends FULL history
       conversationHistory.push({
         role: "function",
-        parts: [
-          {
-            functionResponse: {
-              name: fnName,
-              response: resultData,
-            },
-          },
-        ],
+        parts: fnResponseParts,
       });
     } else {
-      const generatedText = parts.map((p: any) => p.text || "").join("");
-      
-      // Try to parse it immediately to see if it's the final valid JSON
+      const generatedText = responseParts.map((p: any) => p.text || "").join("");
+
       try {
         parseGeminiJsonText(generatedText);
-        // If it succeeds, we are truly done!
         isDone = true;
         finalRawText = generatedText;
         onLog("✅ Audit Complete! Generating final report.");
-      } catch (e) {
-        // If it's not valid JSON, it might be the agent just "talking" or giving an intermediate summary.
-        // Or it messed up the formatting. We tell it to fix it!
-        onLog("⚠️ Agent output was not valid JSON. Asking it to finalize the report...");
+      } catch {
+        jsonRetryCount++;
+        if (jsonRetryCount >= MAX_JSON_RETRIES) {
+          // Last resort: try to salvage whatever JSON we can from the text
+          const salvaged = extractBalancedJsonObject(generatedText);
+          if (salvaged) {
+            try {
+              parseGeminiJsonText(salvaged);
+              isDone = true;
+              finalRawText = salvaged;
+              onLog("✅ Salvaged valid JSON from response. Generating report.");
+              continue;
+            } catch { /* fall through to error */ }
+          }
+          throw new Error("Agent failed to produce valid JSON after multiple retries.");
+        }
+        onLog(`⚠️ Agent output was not valid JSON (attempt ${jsonRetryCount}/${MAX_JSON_RETRIES}). Retrying...`);
         conversationHistory.push({
           role: "user",
-          parts: [{ text: "Your last response was either conversational text or invalid JSON. Please finish your analysis and output ONLY the final raw JSON object matching the schema, with no markdown fences, no conversational prose, and no explanation." }]
+          parts: [{ text: "CRITICAL: Your last response was NOT valid JSON. You MUST respond with ONLY the raw JSON object matching the audit schema. No markdown fences (```), no conversational text, no explanation — just the { ... } JSON object starting with the \"summary\" key." }],
         });
       }
     }

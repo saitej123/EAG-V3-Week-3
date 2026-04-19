@@ -1,8 +1,22 @@
 // src/background/agentTools.ts
+//
+// ──────────────────────────────────────────────────────────────
+// CUSTOM TOOL FUNCTIONS (5 tools — each called by the LLM agent)
+// ──────────────────────────────────────────────────────────────
+// The Gemini LLM decides WHICH tool to call and WITH WHAT arguments.
+// Each function runs, returns a result, and that result is fed back
+// into the next LLM query as part of the conversation history.
+//
+// Tool Categories:
+//   Tool 1 — Pure calculation      (calculate_color_contrast)
+//   Tool 2 — External network call (test_hyperlink_health)
+//   Tool 3 — Browser interaction   (simulate_focus_tabs)
+//   Tool 4 — DOM inspection        (check_image_alt_texts)
+//   Tool 5 — DOM inspection        (analyze_heading_hierarchy)
+// ──────────────────────────────────────────────────────────────
 
-// Tool 1: Math/Calculation
+// ── Tool 1: WCAG Color Contrast Calculator (pure math, no network) ──
 export function calculate_color_contrast(fg_hex: string, bg_hex: string) {
-    // Real contrast calculation implementation
     const hexToRgb = (hex: string) => {
         const h = hex.replace('#', '');
         const val = parseInt(h.length === 3 ? h.split('').map(c => c+c).join('') : h, 16);
@@ -36,7 +50,7 @@ export function calculate_color_contrast(fg_hex: string, bg_hex: string) {
     }
 }
 
-// Tool 2: External API/Network
+// ── Tool 2: Hyperlink Health Checker (external network fetch) ──
 export async function test_hyperlink_health(url: string) {
     try {
         let res = await fetch(url, { method: 'HEAD' });
@@ -50,7 +64,7 @@ export async function test_hyperlink_health(url: string) {
     }
 }
 
-// Tool 3: Browser Interaction (Executing on the Active Tab)
+// ── Tool 3: Keyboard Tab Simulator (chrome.scripting on active tab) ──
 export async function simulate_focus_tabs(tabId: number, count: number) {
     const results = await chrome.scripting.executeScript({
         target: { tabId: tabId },
@@ -66,7 +80,7 @@ export async function simulate_focus_tabs(tabId: number, count: number) {
     return { focused_elements: results[0].result || [] };
 }
 
-// Tool 4: Check Image Alt Texts
+// ── Tool 4: Image Alt-Text Auditor (DOM inspection via scripting) ──
 export async function check_image_alt_texts(tabId: number) {
     const results = await chrome.scripting.executeScript({
         target: { tabId: tabId },
@@ -85,7 +99,7 @@ export async function check_image_alt_texts(tabId: number) {
     return results[0].result || { total_images: 0, missing_alt_attributes: 0 };
 }
 
-// Tool 5: Analyze Heading Hierarchy
+// ── Tool 5: Heading Hierarchy Analyzer (DOM inspection via scripting) ──
 export async function analyze_heading_hierarchy(tabId: number) {
     const results = await chrome.scripting.executeScript({
         target: { tabId: tabId },
@@ -98,7 +112,10 @@ export async function analyze_heading_hierarchy(tabId: number) {
     return results[0].result || { heading_order: [] };
 }
 
-// The declaration we will send to Gemini
+// ──────────────────────────────────────────────────────────────
+// TOOL SCHEMA — sent to Gemini so it knows what tools exist.
+// The LLM reads these declarations and decides which to call.
+// ──────────────────────────────────────────────────────────────
 export const agenticToolsSchema = [{
     functionDeclarations: [
         {
